@@ -5,6 +5,7 @@ import com.audit.log.domain.AuditEvent;
 import com.audit.log.integrity.CanonicalAuditContent;
 import com.audit.log.integrity.CanonicalJsonService;
 import com.audit.log.integrity.HashService;
+import com.audit.log.persistence.AuditEventRepository;
 import com.audit.log.persistence.ChainHead;
 import com.audit.log.persistence.ChainHeadRepository;
 import org.springframework.stereotype.Service;
@@ -22,28 +23,39 @@ import java.util.UUID;
 public class AuditCommandService {
 
     private static final int SCHEMA_VERSION = 1;
+    private final ChainHeadRepository chainHeadRepository;
+    private final AuditEventRepository auditEventRepository;
     private final CanonicalJsonService canonicalJsonService;
     private final HashService hashService;
     private final Clock clock;
 
     public AuditCommandService(
+            ChainHeadRepository chainHeadRepository,
+            AuditEventRepository auditEventRepository,
             CanonicalJsonService canonicalJsonService,
             HashService hashService,
             Clock clock
     ) {
+        this.chainHeadRepository = chainHeadRepository;
+        this.auditEventRepository = auditEventRepository;
         this.canonicalJsonService = canonicalJsonService;
         this.hashService = hashService;
         this.clock = clock;
     }
 
     /**
-     * Builds a hashed audit event from the given request. Does not persist anything or consult
-     * the chain's tip, so {@code previousHash} is always the genesis hash for now.
+     * Appends one new event to the global chain: locks the chain head, assigns the event's id
+     * and server timestamp, computes its content and chain hashes off the current tip, inserts
+     * it, and advances the chain head — all within a single transaction, so a failure at any step
+     * leaves neither the event row nor the chain head changed.
      *
      * @param request the caller-supplied event to record
-     * @return the hashed event, with a placeholder sequenceId of {@code 0}
+     * @return the persisted event, including its server-assigned sequenceId and hashes
      */
+    @Transactional
     public AuditEvent create(CreateAuditEventRequest request) {
+
+        ChainHead chainHead = chainHeadRepository.lockOrCreate(hashService.genesisHash());
 
         UUID eventId = UUID.randomUUID();
         Instant eventTimestamp = clock.instant();
@@ -61,11 +73,35 @@ public class AuditCommandService {
 
         String canonicalJson = canonicalJsonService.canonicalize(canonicalContent);
         String contentHash = hashService.sha256(canonicalJson);
-        String previousHash = hashService.genesisHash();
+        String previousHash = chainHead.lastChainHash();
         String chainHash = hashService.chainHash(previousHash, contentHash);
 
-        return new AuditEvent(
+        AuditEvent eventToInsert = new AuditEvent(
                 0L,
+                eventId,
+                request.eventType(),
+                request.actorId(),
+                request.resourceType(),
+                request.resourceId(),
+                request.payload(),
+                eventTimestamp,
+                SCHEMA_VERSION,
+                contentHash,
+                previousHash,
+                chainHash
+        );
+
+        long sequenceId = auditEventRepository.insert(eventToInsert);
+
+        chainHeadRepository.update(
+                sequenceId,
+                eventId,
+                chainHash,
+                chainHead.eventCount() + 1
+        );
+
+        return new AuditEvent(
+                sequenceId,
                 eventId,
                 request.eventType(),
                 request.actorId(),

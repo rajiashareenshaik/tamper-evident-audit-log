@@ -29,6 +29,55 @@ public class ChainHeadRepository {
      * @param genesisHash hash to seed {@code last_chain_hash} with if this chain is brand new
      * @return the current, now-locked chain head
      */
+    public ChainHead lockOrCreate(String genesisHash) {
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO audit_chain_head (
+                    chain_id,
+                    last_sequence_id,
+                    last_event_id,
+                    last_chain_hash,
+                    event_count
+                )
+                VALUES (?, NULL, NULL, ?, 0)
+                ON CONFLICT (chain_id) DO NOTHING
+                """,
+                GLOBAL_CHAIN_ID,
+                genesisHash
+        );
+
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT
+                    chain_id,
+                    last_sequence_id,
+                    last_event_id,
+                    last_chain_hash,
+                    event_count
+                FROM audit_chain_head
+                WHERE chain_id = ?
+                FOR UPDATE
+                """,
+                (rs, rowNum) -> {
+
+                    Long lastSequenceId =
+                            rs.getObject("last_sequence_id", Long.class);
+
+                    UUID lastEventId =
+                            rs.getObject("last_event_id", UUID.class);
+
+                    return new ChainHead(
+                            rs.getString("chain_id"),
+                            lastSequenceId,
+                            lastEventId,
+                            rs.getString("last_chain_hash"),
+                            rs.getLong("event_count")
+                    );
+                },
+                GLOBAL_CHAIN_ID
+        );
+    }
 
     /**
      * Advances the global chain head to reflect the event most recently appended.
