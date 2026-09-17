@@ -6,6 +6,10 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.Map;
 import java.util.TreeMap;
 
+/**
+ * Produces a deterministic JSON representation of an audit event's content, so that hashing the
+ * same logical event always yields the same {@code contentHash} regardless of map key ordering.
+ */
 @Component
 public class CanonicalJsonService {
 
@@ -15,6 +19,14 @@ public class CanonicalJsonService {
         this.jsonMapper = jsonMapper;
     }
 
+    /**
+     * Serializes the given content to JSON with all map keys (including nested ones) sorted, so
+     * the output is stable and safe to feed into {@link com.audit.log.integrity.HashService}.
+     *
+     * @param content the event content to canonicalize
+     * @return a deterministic JSON string for {@code content}
+     * @throws IllegalStateException if serialization fails
+     */
     public String canonicalize(
             CanonicalAuditContent content
     ) {
@@ -41,6 +53,9 @@ public class CanonicalJsonService {
         }
     }
 
+    /**
+     * @return a copy of {@code input} with keys sorted and all nested values normalized
+     */
     private Map<String, Object> normalizeMap(
             Map<String, Object> input
     ) {
@@ -56,6 +71,10 @@ public class CanonicalJsonService {
         return sorted;
     }
 
+    /**
+     * Recursively sorts map keys and normalizes elements inside nested maps/iterables; any other
+     * value is returned unchanged.
+     */
     @SuppressWarnings("unchecked")
     private Object normalizeValue(Object value) {
 
