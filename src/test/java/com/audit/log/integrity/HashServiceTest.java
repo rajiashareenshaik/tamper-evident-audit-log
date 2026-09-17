@@ -1,15 +1,18 @@
 package com.audit.log.integrity;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@DisplayName("HashService")
 class HashServiceTest {
 
     private final HashService hashService =
             new HashService();
 
     @Test
+    @DisplayName("produces a stable, 64-char SHA-256 hash for the same input")
     void shouldProduceStableSha256Hash() {
 
         String first =
@@ -23,6 +26,7 @@ class HashServiceTest {
     }
 
     @Test
+    @DisplayName("produces different hashes for different inputs")
     void shouldProduceDifferentHashForDifferentInput() {
 
         String first =
@@ -35,6 +39,7 @@ class HashServiceTest {
     }
 
     @Test
+    @DisplayName("produces a stable genesis hash across calls")
     void shouldProduceStableGenesisHash() {
 
         String first =
@@ -48,6 +53,7 @@ class HashServiceTest {
     }
 
     @Test
+    @DisplayName("changes the chain hash when the previous hash changes")
     void shouldIncludePreviousHashInChainHash() {
 
         String contentHash =

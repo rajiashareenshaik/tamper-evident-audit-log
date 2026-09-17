@@ -1,5 +1,6 @@
 package com.audit.log.integrity;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -10,6 +11,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@DisplayName("CanonicalJsonService")
 class CanonicalJsonServiceTest {
 
     private final CanonicalJsonService service =
@@ -20,6 +22,7 @@ class CanonicalJsonServiceTest {
             );
 
     @Test
+    @DisplayName("produces identical JSON for the same content regardless of map key order")
     void shouldProduceSameJsonRegardlessOfPayloadKeyOrder() {
 
         UUID eventId =
