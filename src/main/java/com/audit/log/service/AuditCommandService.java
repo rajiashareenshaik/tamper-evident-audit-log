@@ -5,7 +5,6 @@ import com.audit.log.domain.AuditEvent;
 import com.audit.log.integrity.CanonicalAuditContent;
 import com.audit.log.integrity.CanonicalJsonService;
 import com.audit.log.integrity.HashService;
-import com.audit.log.persistence.AuditEventRepository;
 import com.audit.log.persistence.ChainHead;
 import com.audit.log.persistence.ChainHeadRepository;
 import org.springframework.stereotype.Service;
