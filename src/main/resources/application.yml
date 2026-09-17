@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: audit-log-service
+
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:55432/auditdb
+    username: audit
+    password: audit
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
