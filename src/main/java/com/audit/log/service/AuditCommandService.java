@@ -5,6 +5,7 @@ import com.audit.log.domain.AuditEvent;
 import com.audit.log.integrity.CanonicalAuditContent;
 import com.audit.log.integrity.CanonicalJsonService;
 import com.audit.log.integrity.HashService;
+import com.audit.log.persistence.AuditEventFilter;
 import com.audit.log.persistence.AuditEventRepository;
 import com.audit.log.persistence.ChainHead;
 import com.audit.log.persistence.ChainHeadRepository;
@@ -13,11 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * Writes new events onto the single global audit hash chain. Owns the transaction and locking
- * boundary for the whole append operation; the repositories it calls hold none of their own.
+ * Owns reads and writes on the single global audit hash chain. Owns the transaction and locking
+ * boundary for the append operation; the repositories it calls hold none of their own.
  */
 @Service
 public class AuditCommandService {
@@ -114,5 +116,15 @@ public class AuditCommandService {
                 previousHash,
                 chainHash
         );
+    }
+
+    /**
+     * Finds audit events matching the given filter.
+     *
+     * @param filter fields to filter by; a {@code null} field is not applied as a filter
+     * @return matching events, oldest first, up to {@link AuditEventFilter#limit()} of them
+     */
+    public List<AuditEvent> findMatching(AuditEventFilter filter) {
+        return auditEventRepository.findMatching(filter);
     }
 }

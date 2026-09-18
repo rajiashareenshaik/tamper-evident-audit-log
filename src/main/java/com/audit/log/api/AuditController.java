@@ -1,8 +1,14 @@
 package com.audit.log.api;
 
+import com.audit.log.domain.AuditEvent;
 import com.audit.log.persistence.AuditEventFilter;
-import com.audit.log.persistence.AuditEventRepository;
+import com.audit.log.service.AuditCommandService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,19 +17,33 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Read-side HTTP API for querying events on the global audit hash chain.
+ * HTTP API for appending to and querying the global audit hash chain.
  */
 @RestController
 @RequestMapping("/api/v1/audit/events")
-public class AuditReadController {
+public class AuditController {
 
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 500;
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditCommandService auditCommandService;
 
-    public AuditReadController(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public AuditController(AuditCommandService auditCommandService) {
+        this.auditCommandService = auditCommandService;
+    }
+
+    /**
+     * Records a new audit event onto the global chain.
+     *
+     * @param request the event to record
+     * @return 201 with the persisted event, including its server-assigned sequenceId and hashes
+     */
+    @PostMapping
+    public ResponseEntity<AuditEventResponse> create(
+            @Valid @RequestBody CreateAuditEventRequest request
+    ) {
+        AuditEvent event = auditCommandService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AuditEventResponse.from(event));
     }
 
     /**
@@ -56,7 +76,7 @@ public class AuditReadController {
                 clampLimit(limit)
         );
 
-        return auditEventRepository.findMatching(filter).stream()
+        return auditCommandService.findMatching(filter).stream()
                 .map(AuditEventResponse::from)
                 .toList();
     }
