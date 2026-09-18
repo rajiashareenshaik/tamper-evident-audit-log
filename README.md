@@ -40,6 +40,38 @@ OpenAPI
 
 Spring Boot Actuator
 
+## Running Locally
+
+Start PostgreSQL (exposed on `localhost:55432`, database `auditdb`):
+
+```bash
+docker compose up -d
+```
+
+Run the application (applies Flyway migrations on startup, listens on `localhost:8080`):
+
+```bash
+./mvnw spring-boot:run
+```
+
+Run the test suite:
+
+```bash
+./mvnw test
+```
+
+Build a runnable jar:
+
+```bash
+./mvnw clean package
+```
+
+Stop PostgreSQL:
+
+```bash
+docker compose down
+```
+
 ## Repository Structure
 
 The repository contains the application code, architecture documentation, test strategy, scenario documentation, engineering decisions, AI usage traceability, and final implementation summary.
