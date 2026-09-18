@@ -118,4 +118,16 @@ public class ChainHeadRepository {
             );
         }
     }
+
+    public ChainHead findGlobal() {
+        java.util.List<ChainHead> heads = jdbcTemplate.query(
+                "SELECT chain_id, last_sequence_id, last_event_id, last_chain_hash, event_count " +
+                        "FROM audit_chain_head WHERE chain_id = ?",
+                (rs, rowNum) -> new ChainHead(rs.getString("chain_id"),
+                        rs.getObject("last_sequence_id", Long.class),
+                        rs.getObject("last_event_id", UUID.class),
+                        rs.getString("last_chain_hash"), rs.getLong("event_count")),
+                GLOBAL_CHAIN_ID);
+        return heads.isEmpty() ? null : heads.get(0);
+    }
 }

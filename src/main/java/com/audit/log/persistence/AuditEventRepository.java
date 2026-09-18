@@ -143,6 +143,11 @@ public class AuditEventRepository {
 
         return jdbcTemplate.query(sql.toString(), rowMapper(), args.toArray());
     }
+    /** Reads every physical event, including archived events, for integrity verification. */
+    public List<AuditEvent> findAllForVerification() {
+        return jdbcTemplate.query(SELECT_SQL + " ORDER BY sequence_id ASC", rowMapper());
+    }
+
 
     private RowMapper<AuditEvent> rowMapper() {
         return (rs, rowNum) -> new AuditEvent(
