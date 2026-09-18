@@ -26,4 +26,5 @@ management:
 
 audit:
   retention-window: P365D
+  redaction-encryption-key: ${AUDIT_REDACTION_ENCRYPTION_KEY:}
   cryptographic-key: ${AUDIT_CRYPTOGRAPHIC_KEY:local-development-key-change-me}

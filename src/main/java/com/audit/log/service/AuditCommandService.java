@@ -10,6 +10,7 @@ import com.audit.log.persistence.AuditEventRepository;
 import com.audit.log.persistence.ChainHead;
 import com.audit.log.persistence.ChainHeadRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -30,19 +31,28 @@ public class AuditCommandService {
     private final CanonicalJsonService canonicalJsonService;
     private final HashService hashService;
     private final Clock clock;
+    private final RedactionService redactionService;
 
+    @Autowired
     public AuditCommandService(
             ChainHeadRepository chainHeadRepository,
             AuditEventRepository auditEventRepository,
             CanonicalJsonService canonicalJsonService,
             HashService hashService,
-            Clock clock
+            Clock clock,
+            RedactionService redactionService
     ) {
         this.chainHeadRepository = chainHeadRepository;
         this.auditEventRepository = auditEventRepository;
         this.canonicalJsonService = canonicalJsonService;
         this.hashService = hashService;
         this.clock = clock;
+        this.redactionService = redactionService;
+    }
+
+    AuditCommandService(ChainHeadRepository chainHeadRepository, AuditEventRepository auditEventRepository,
+                        CanonicalJsonService canonicalJsonService, HashService hashService, Clock clock) {
+        this(chainHeadRepository, auditEventRepository, canonicalJsonService, hashService, clock, null);
     }
 
     /**
@@ -61,6 +71,9 @@ public class AuditCommandService {
 
         UUID eventId = UUID.randomUUID();
         Instant eventTimestamp = clock.instant();
+        RedactionService.PreparedPayload prepared = redactionService == null
+                ? new RedactionService.PreparedPayload(request.payload(), List.of())
+                : redactionService.prepare(eventId, request.payload(), request.redactableFields());
 
         CanonicalAuditContent canonicalContent = new CanonicalAuditContent(
                 eventId,
@@ -68,7 +81,7 @@ public class AuditCommandService {
                 request.actorId(),
                 request.resourceType(),
                 request.resourceId(),
-                request.payload(),
+                prepared.payload(),
                 eventTimestamp,
                 SCHEMA_VERSION
         );
@@ -85,7 +98,7 @@ public class AuditCommandService {
                 request.actorId(),
                 request.resourceType(),
                 request.resourceId(),
-                request.payload(),
+                prepared.payload(),
                 eventTimestamp,
                 SCHEMA_VERSION,
                 contentHash,
@@ -94,6 +107,7 @@ public class AuditCommandService {
         );
 
         long sequenceId = auditEventRepository.insert(eventToInsert);
+        if (redactionService != null) redactionService.persist(prepared);
 
         chainHeadRepository.update(
                 sequenceId,
@@ -109,7 +123,7 @@ public class AuditCommandService {
                 request.actorId(),
                 request.resourceType(),
                 request.resourceId(),
-                request.payload(),
+                redactionService == null ? prepared.payload() : redactionService.hydrate(eventToInsert).payload(),
                 eventTimestamp,
                 SCHEMA_VERSION,
                 contentHash,
@@ -125,6 +139,7 @@ public class AuditCommandService {
      * @return matching events, oldest first, up to {@link AuditEventFilter#limit()} of them
      */
     public List<AuditEvent> findMatching(AuditEventFilter filter) {
-        return auditEventRepository.findMatching(filter);
+        List<AuditEvent> found = auditEventRepository.findMatching(filter);
+        return redactionService == null ? found : found.stream().map(redactionService::hydrate).toList();
     }
 }

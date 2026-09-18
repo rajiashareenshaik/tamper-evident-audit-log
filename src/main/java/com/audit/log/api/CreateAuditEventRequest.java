@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Inbound request to record a new audit event, as submitted by a caller.
@@ -30,6 +31,16 @@ public record CreateAuditEventRequest(
         String resourceId,
 
         @NotNull
-        Map<String, Object> payload
+        Map<String, Object> payload,
+
+        List<String> redactableFields
 ) {
+    public CreateAuditEventRequest(String eventType, String actorId, String resourceType,
+                                   String resourceId, Map<String, Object> payload) {
+        this(eventType, actorId, resourceType, resourceId, payload, List.of());
+    }
+
+    public CreateAuditEventRequest {
+        redactableFields = redactableFields == null ? List.of() : List.copyOf(redactableFields);
+    }
 }
