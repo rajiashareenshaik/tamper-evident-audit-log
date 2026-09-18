@@ -102,6 +102,7 @@ public class AuditEventRepository {
 
         StringBuilder sql = new StringBuilder(SELECT_SQL);
         List<Object> args = new ArrayList<>();
+        sql.append("AND NOT EXISTS (SELECT 1 FROM audit_event_archive a WHERE a.event_id = audit_event.event_id)");
 
         if (filter.actorId() != null) {
             sql.append(" AND actor_id = ?");

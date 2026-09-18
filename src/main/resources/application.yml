@@ -23,3 +23,7 @@ management:
           - health
           - info
           - metrics
+
+audit:
+  retention-window: P365D
+  cryptographic-key: ${AUDIT_CRYPTOGRAPHIC_KEY:local-development-key-change-me}
