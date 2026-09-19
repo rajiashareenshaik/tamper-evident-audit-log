@@ -46,7 +46,13 @@ Modify the exported bundle
 
 Show signature verification failure
 
-Demonstrate the compliance reporting endpoint
+Record a client account access event with outcome ALLOWED via `POST /api/v1/audit/client-account-access`
+
+Record a second event with outcome DENIED
+
+Query client account access events by actor ID and by account ID via `GET /api/v1/audit/client-account-access`
+
+Note that this endpoint has no authentication or tenant isolation in the current prototype
 
 ## Live Change Preparation
 
