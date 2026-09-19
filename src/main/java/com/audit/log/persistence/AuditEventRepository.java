@@ -149,6 +149,27 @@ public class AuditEventRepository {
         return jdbcTemplate.query(SELECT_SQL + " ORDER BY sequence_id ASC", rowMapper());
     }
 
+    /**
+ * Reads matching records for an evidentiary export, including archived records.
+ */
+public List<AuditEvent> findAllByActorOrResource(
+        String actorId,
+        String resourceId
+) {
+    if ((actorId == null) == (resourceId == null)) {
+        throw new IllegalArgumentException(
+                "Exactly one of actorId or resourceId is required");
+    }
+
+    String column = actorId != null ? "actor_id" : "resource_id";
+    String value = actorId != null ? actorId : resourceId;
+
+    return jdbcTemplate.query(
+            SELECT_SQL + " AND " + column + " = ? ORDER BY sequence_id ASC",
+            rowMapper(),
+            value);
+}
+
 
     private RowMapper<AuditEvent> rowMapper() {
         return (rs, rowNum) -> new AuditEvent(
