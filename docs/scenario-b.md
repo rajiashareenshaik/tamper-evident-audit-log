@@ -30,8 +30,10 @@ Callers mark fields as redactable when the event is created:
 ```
 
 The field path uses dot notation and may point into nested objects. Before hashing, the service replaces the
-plain value with a random redaction ID and an HMAC-SHA-256 commitment. The original value is encrypted with
-AES-256-GCM and stored separately. Reads decrypt the value until redaction is requested:
+plain value with a random redaction ID and a commitment `HMAC-SHA-256(commitmentKey, redactionId + eventId +
+fieldPath + value)`. Binding the commitment to the redaction ID, event, and field path (not just the value)
+means two fields holding the same underlying secret never produce the same commitment. The original value is
+encrypted with AES-256-GCM and stored separately. Reads decrypt the value until redaction is requested:
 
 ```text
 POST /api/v1/audit/events/{eventId}/redactions
@@ -40,13 +42,20 @@ POST /api/v1/audit/events/{eventId}/redactions
 
 Redaction destroys the stored ciphertext and records the redaction time. Later reads return
 `{"redacted":true}` for that field. The immutable payload still contains the commitment, so its content hash
-and every following chain hash remain unchanged.
+and every following chain hash remain unchanged. Redacting an already-redacted or never-redactable field path
+is a safe no-op (it matches zero rows) rather than an error — the response doesn't distinguish "already
+redacted" from "that path was never redactable," which is a known gap, not a security issue. Redaction is not
+itself recorded as a new audit event in the chain.
 
 The configured cryptographic key must be supplied through `AUDIT_CRYPTOGRAPHIC_KEY` outside local
-development. The prototype derives both encryption and commitment keys from that setting to keep setup
-small. Production should use separate versioned keys in a key-management service. Dot notation does not
-currently address array elements or payload keys containing literal dots. Once ciphertext is destroyed, the
-service cannot recover the value or prove what it was without somebody presenting the original value.
+development, and encryption/commitment use independently-derived subkeys of it (never the same raw key for
+both). Production should use separate versioned keys in a key-management service — keys cannot be rotated
+today without breaking already-issued commitments, since they're baked into `content_hash` forever. The
+AES-GCM ciphertext also has no associated data binding it to its own `redactionId`/`eventId`/`fieldPath` row,
+so a ciphertext copied between rows (which requires direct database write access) would still decrypt. Dot
+notation does not currently address array elements or payload keys containing literal dots. Once ciphertext
+is destroyed, the service cannot recover the value or prove what it was without somebody presenting the
+original value.
 
 ## Bulk export
 

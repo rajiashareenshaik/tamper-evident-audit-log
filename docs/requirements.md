@@ -18,6 +18,68 @@ Scenario C applies the audit platform to a less-defined compliance reporting req
 
 ---
 
+# 1a. Implementation Status and Deviations
+
+Scenarios A and B are implemented; Scenario C is not started. This section records every place
+the actual implementation deviates from the requirement text below, so this document stays an
+honest record of original intent without being silently rewritten to match what was built.
+
+**Pagination response shape (Section 17).** The API does not wrap results in
+`{"items", "nextCursor", "hasMore"}`. `GET /api/v1/audit/events` returns a bare JSON array of
+events. The cursor parameter is named `afterSequenceId`, not `cursor`. The default page size is
+50, not 100 (the maximum of 500 matches).
+
+**Time-range semantics (Section 16).** Both `from` and `to` are inclusive (`[from, to]`), not
+`[from, to)` as specified. A request with `from` after `to` is not currently rejected — no such
+validation exists.
+
+**Verification failure types (Section 20).** `INVALID_GENESIS_REFERENCE` is not an implemented
+failure type. The implemented set is `CONTENT_HASH_MISMATCH`, `PREVIOUS_HASH_MISMATCH`,
+`CHAIN_HASH_MISMATCH`, `CHAIN_HEAD_MISMATCH`, and `CHAIN_COUNT_MISMATCH`.
+
+**HTTP error response shape (Section 29).** The implemented shape is `{"error": "<message>"}`,
+not `{"code", "message", "requestId", "timestamp"}`. Only `400 Bad Request` (via
+`IllegalArgumentException`) is actually handled; `404`/`409`/`413`/`503` are not implemented.
+
+**Request correlation (Section 31).** `X-Request-ID` support does not exist. No request
+identifier is generated, logged, or returned.
+
+**Retention table (Section 34).** The implemented table is `audit_event_archive` with columns
+`event_id`, `archived_at`, `policy_cutoff` — not `audit_retention_status` with an `event_id`,
+`archived_at`, `reason` shape.
+
+**Sensitive-value commitment (Section 37).** The implemented formula is
+`HMAC-SHA-256(commitmentKey, redactionId + eventId + fieldPath + value)` — it additionally binds
+the random per-redaction ID, not just `eventId + jsonPath + sensitiveValue`, so that two fields
+holding an identical secret never produce an identical commitment.
+
+**Redaction audit trail (Section 39).** Not implemented. Redacting a field does not write a new
+`AUDIT_FIELD_REDACTED` audit event; `RedactionService.redact()` only updates
+`audit_redaction_value`.
+
+**Database technology / Testcontainers (Section 25).** Integration tests do not use
+Testcontainers. The suite is Mockito-based; the one `@SpringBootTest`
+(`AuditLogServiceApplicationTests`) runs against whatever Postgres the local Docker Compose stack
+provides.
+
+**Scenario A concurrency test (Section 24).** Not implemented. No test submits concurrent writes
+and checks for chain forks; the row-locking design is reviewed by inspection only.
+
+**Scenario A tamper test (Section 22).** Not implemented as an automated integration test that
+bypasses the application to edit `audit_event` directly. Tamper-detection logic is covered by
+unit tests that hand-construct a mismatched record through a mock repository, which verifies the
+detection logic but not a real out-of-band database edit.
+
+**Authentication and authorization.** Not mentioned in this document's original scope, but worth
+recording here: no endpoint has any authentication or authorization control, including the
+irreversible redaction endpoint and the bulk export endpoint. See
+[Threat Model: Known Open Gaps](threat-model.md#known-open-gaps-scenario-b).
+
+See [docs/scenario-a.md](scenario-a.md), [docs/scenario-b.md](scenario-b.md), and
+[docs/testing.md](testing.md#known-gaps) for further detail on each of these.
+
+---
+
 # 2. Engineering Principles
 
 The following principles will guide the implementation.

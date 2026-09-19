@@ -18,27 +18,15 @@ Scenarios A and B are implemented. The service supports event writes and filtere
 verification, policy-based soft archiving, commitment-backed structured redaction, and signed bulk exports.
 See [Scenario B](docs/scenario-b.md) for the security model and its limitations.
 
-## Planned Technology
+## Technology
 
-Java 21
+In use: Java 21, Spring Boot, PostgreSQL, Spring JDBC, Flyway, Docker Compose, JUnit 5, Mockito,
+Spring Boot Actuator.
 
-Spring Boot
-
-PostgreSQL
-
-Spring JDBC
-
-Flyway
-
-Docker Compose
-
-JUnit
-
-Testcontainers
-
-OpenAPI
-
-Spring Boot Actuator
+Originally planned but not adopted: Testcontainers (tests use Mockito for units and the local
+Docker Compose Postgres directly for the one `@SpringBootTest` context-load test, not an isolated
+Testcontainers instance) and OpenAPI (no springdoc/swagger dependency exists; the API is
+documented in [docs/requirements.md](docs/requirements.md) and [docs/scenario-b.md](docs/scenario-b.md) instead).
 
 ## Running Locally
 
@@ -87,6 +75,8 @@ docker compose down
 
 ## Repository Structure
 
-The repository contains the application code, architecture documentation, test strategy, scenario documentation, engineering decisions, AI usage traceability, and final implementation summary.
-
-Additional setup and execution instructions will be added as implementation progresses.
+The repository contains the application code, [architecture documentation](docs/architecture.md),
+[test strategy](docs/testing.md), scenario documentation ([A](docs/scenario-a.md),
+[B](docs/scenario-b.md), [C](docs/scenario-c.md)), [engineering decisions](docs/decisions/),
+[threat model](docs/threat-model.md), [AI usage traceability](AI_USAGE.md), and final
+implementation summary (`FINAL_ENGINEERING_SUMMARY.md`, written once Scenario C is complete).
