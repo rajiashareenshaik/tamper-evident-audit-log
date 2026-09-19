@@ -140,6 +140,7 @@ class AuditEventRepositoryTest {
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), argsCaptor.capture());
 
         String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("audit_event_archive"), "findMatching must exclude archived events");
         assertTrue(sql.contains("AND actor_id = ?"));
         assertTrue(sql.contains("AND resource_type = ?"));
         assertTrue(sql.contains("AND resource_id = ?"));
@@ -239,5 +240,73 @@ class AuditEventRepositoryTest {
         assertEquals("content-hash", event.contentHash());
         assertEquals("previous-hash", event.previousHash());
         assertEquals("chain-hash", event.chainHash());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("findAllByActorOrResource filters by actorId, ascending, including archived events")
+    void shouldFindAllByActorIdIncludingArchivedEvents() {
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(String.class)))
+                .thenReturn(List.of());
+
+        repository.findAllByActorOrResource("user-1", null);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> argCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), argCaptor.capture());
+
+        assertTrue(sqlCaptor.getValue().contains("actor_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("ORDER BY sequence_id ASC"));
+        assertFalse(sqlCaptor.getValue().contains("audit_event_archive"),
+                "export must include archived events, unlike findMatching");
+        assertEquals("user-1", argCaptor.getValue());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("findAllByActorOrResource filters by resourceId, ascending, including archived events")
+    void shouldFindAllByResourceIdIncludingArchivedEvents() {
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(String.class)))
+                .thenReturn(List.of());
+
+        repository.findAllByActorOrResource(null, "A1");
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> argCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), argCaptor.capture());
+
+        assertTrue(sqlCaptor.getValue().contains("resource_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("ORDER BY sequence_id ASC"));
+        assertFalse(sqlCaptor.getValue().contains("audit_event_archive"));
+        assertEquals("A1", argCaptor.getValue());
+    }
+
+    @Test
+    @DisplayName("findAllByActorOrResource rejects both filters or neither filter")
+    void shouldRejectBothOrNeitherFilterForExport() {
+        assertThrows(IllegalArgumentException.class,
+                () -> repository.findAllByActorOrResource(null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> repository.findAllByActorOrResource("user-1", "A1"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("findAllForVerification reads every event, ascending, including archived events")
+    void shouldFindAllForVerificationIncludingArchivedEvents() {
+
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class)))
+                .thenReturn(List.of());
+
+        repository.findAllForVerification();
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class));
+
+        assertTrue(sqlCaptor.getValue().contains("ORDER BY sequence_id ASC"));
+        assertFalse(sqlCaptor.getValue().contains("audit_event_archive"),
+                "chain verification must read archived events too");
     }
 }

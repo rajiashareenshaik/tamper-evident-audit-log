@@ -24,14 +24,31 @@ public class RedactionService {
     private final JdbcTemplate jdbc;
     private final JsonMapper json;
     private final Clock clock;
-    private final byte[] key;
+    private final byte[] encryptionKey;
+    private final byte[] commitmentKey;
     private final SecureRandom random = new SecureRandom();
 
     public RedactionService(JdbcTemplate jdbc, JsonMapper json, Clock clock,
                             @Value("${audit.cryptographic-key}") String configuredKey) {
         this.jdbc = jdbc; this.json = json; this.clock = clock;
-        try { this.key = MessageDigest.getInstance("SHA-256").digest(configuredKey.getBytes(StandardCharsets.UTF_8)); }
-        catch (Exception e) { throw new IllegalStateException(e); }
+        this.encryptionKey = derive(configuredKey, "encryption");
+        this.commitmentKey = derive(configuredKey, "commitment");
+    }
+
+    /**
+     * Derives an independent subkey for the given purpose from the single configured secret, so
+     * the same secret never backs two different cryptographic primitives (AES-GCM vs. HMAC).
+     */
+    private static byte[] derive(String configuredKey, String purpose) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(configuredKey.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(purpose.getBytes(StandardCharsets.UTF_8));
+            return digest.digest();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public PreparedPayload prepare(UUID eventId, Map<String, Object> original, List<String> paths) {
@@ -46,7 +63,7 @@ public class RedactionService {
             Object value = parent.get(leaf);
             UUID redactionId = UUID.randomUUID();
             String serialized = write(value);
-            parent.put(leaf, Map.of(ID, redactionId.toString(), COMMITMENT, hmac(serialized)));
+            parent.put(leaf, Map.of(ID, redactionId.toString(), COMMITMENT, hmac(redactionId, eventId, path, serialized)));
             secrets.add(new Secret(redactionId, eventId, path, encrypt(serialized)));
         }
         return new PreparedPayload(copy, secrets);
@@ -83,7 +100,13 @@ public class RedactionService {
         if (value instanceof Map<?, ?> raw) {
             Map<String,Object> map = (Map<String,Object>) raw;
             if (map.containsKey(ID) && map.containsKey(COMMITMENT)) {
-                UUID id = UUID.fromString(String.valueOf(map.get(ID)));
+                UUID id;
+                try {
+                    id = UUID.fromString(String.valueOf(map.get(ID)));
+                } catch (IllegalArgumentException notARealMarker) {
+                    map.replaceAll((key, nested) -> hydrateValue(nested));
+                    return map;
+                }
                 List<String> values = jdbc.query("SELECT encrypted_value FROM audit_redaction_value WHERE redaction_id=?",
                         (rs, n) -> rs.getString(1), id);
                 if (values.isEmpty() || values.get(0) == null) return Map.of("redacted", true);
@@ -95,15 +118,28 @@ public class RedactionService {
         return value;
     }
 
-    private String hmac(String value) {
-        try { Mac mac = Mac.getInstance("HmacSHA256"); mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+    /**
+     * Binds the commitment to this specific redaction (id, event, field path) as well as the
+     * value, so two fields holding the same underlying value never produce the same commitment.
+     */
+    private String hmac(UUID redactionId, UUID eventId, String path, String value) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(commitmentKey, "HmacSHA256"));
+            mac.update(redactionId.toString().getBytes(StandardCharsets.UTF_8));
+            mac.update((byte) 0);
+            mac.update(eventId.toString().getBytes(StandardCharsets.UTF_8));
+            mac.update((byte) 0);
+            mac.update(path.getBytes(StandardCharsets.UTF_8));
+            mac.update((byte) 0);
+            mac.update(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(mac.doFinal());
         } catch (Exception e) { throw new IllegalStateException("Cannot create redaction commitment", e); }
     }
 
     private String encrypt(String value) {
         try { byte[] iv = new byte[12]; random.nextBytes(iv); Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, "AES"), new GCMParameterSpec(128, iv));
             byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
             byte[] out = new byte[iv.length + encrypted.length]; System.arraycopy(iv,0,out,0,iv.length); System.arraycopy(encrypted,0,out,iv.length,encrypted.length);
             return Base64.getEncoder().encodeToString(out);
@@ -112,7 +148,7 @@ public class RedactionService {
 
     private String decrypt(String encoded) {
         try { byte[] in = Base64.getDecoder().decode(encoded); byte[] iv = Arrays.copyOfRange(in,0,12); byte[] data = Arrays.copyOfRange(in,12,in.length);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE,new SecretKeySpec(key,"AES"),new GCMParameterSpec(128,iv));
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE,new SecretKeySpec(encryptionKey,"AES"),new GCMParameterSpec(128,iv));
             return new String(cipher.doFinal(data), StandardCharsets.UTF_8);
         } catch (Exception e) { throw new IllegalStateException("Cannot decrypt redactable value", e); }
     }

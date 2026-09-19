@@ -1,41 +1,82 @@
-# Scenario B
+# Scenario B: Retention, redaction, and export
 
-## Objective
-
-Scenario B extends the audit service with retention, structured redaction, and bulk export.
+Scenario B extends the audit log without weakening the append-only chain built in Scenario A.
 
 ## Retention
 
-Older records will be archivable through metadata rather than modifying the immutable event itself.
+`POST /api/v1/audit/retention/archive-expired` archives records older than `audit.retention-window`
+(365 days by default). Archiving writes a row to `audit_event_archive`; it does not update or delete the
+original audit event. Normal event queries hide archived records, while chain verification deliberately
+reads every physical event. Re-running the retention job is safe because the archive operation is
+idempotent.
 
-Verification must continue to work when records are legitimately archived.
+This is a soft archive, not storage reclamation. Keeping the original record is what lets the service prove
+the full chain without inventing special gaps or trusted archive markers. A production system that moves
+old rows to cold storage would need signed boundary checkpoints and a verifier able to read both stores.
 
-## Structured Redaction
+## Structured redaction
 
-Sensitive fields that may require later removal will be identified at ingestion time.
+Callers mark fields as redactable when the event is created:
 
-The immutable audit record will keep a cryptographic commitment to the original value.
+```json
+{
+  "eventType": "ACCOUNT_UPDATED",
+  "actorId": "user-17",
+  "resourceType": "ACCOUNT",
+  "resourceId": "account-42",
+  "payload": { "profile": { "ssn": "123-45-6789" } },
+  "redactableFields": ["profile.ssn"]
+}
+```
 
-The readable value will be stored separately in encrypted form.
+The field path uses dot notation and may point into nested objects. Before hashing, the service replaces the
+plain value with a random redaction ID and an HMAC-SHA-256 commitment. The original value is encrypted with
+AES-256-GCM and stored separately. Reads decrypt the value until redaction is requested:
 
-Redaction will remove access to the readable value without modifying the original event hash.
+```text
+POST /api/v1/audit/events/{eventId}/redactions
+{"fields":["profile.ssn"]}
+```
 
-## Bulk Export
+Redaction destroys the stored ciphertext and records the redaction time. Later reads return
+`{"redacted":true}` for that field. The immutable payload still contains the commitment, so its content hash
+and every following chain hash remain unchanged.
 
-The service will support exporting events by actor ID or resource ID.
+The configured cryptographic key must be supplied through `AUDIT_CRYPTOGRAPHIC_KEY` outside local
+development. The prototype derives both encryption and commitment keys from that setting to keep setup
+small. Production should use separate versioned keys in a key-management service. Dot notation does not
+currently address array elements or payload keys containing literal dots. Once ciphertext is destroyed, the
+service cannot recover the value or prove what it was without somebody presenting the original value.
 
-The export will include enough integrity metadata to verify that the exported content has not changed after export.
+## Bulk export
 
-The initial design will use a signed manifest for bundle verification.
+`GET /api/v1/audit/export` accepts exactly one of `actorId` or `resourceId`. The response contains every
+matching record, including archived records, in ascending `sequence_id` order, with each record's content,
+previous, and chain hashes. It also includes a `chainAnchor`: the genesis hash, and the global chain head's
+hash/event count/sequence_id as of export time. The manifest's SHA-256 digest covers the records and the
+chain anchor together, signed with Ed25519; the manifest includes the algorithm names, signature, and public
+key. Recipients can recompute every content and chain hash, recompute the bundle digest, and verify the
+signature without contacting this service.
 
-## Definition of Done
+Because export is filtered by actor or resource, exported records are not necessarily contiguous in the
+global chain — other actors' or resources' events may sit between them there. A recipient can therefore
+always verify each record's own hashes, and can verify that two *consecutive* exported records
+(`sequence_id` differing by exactly 1) chain directly to each other. The `chainAnchor` is a checkpoint, not a
+full inclusion proof: it lets a recipient confirm the export is consistent with a chain that had a given head
+and event count at export time, and lets them confirm the very first exported record genuinely opens the
+chain if its `previousHash` equals the anchor's `genesisHash`. It does not, by itself, prove how an exported
+record that isn't chain-adjacent to its neighbor in the bundle relates to the intervening, unexported events —
+that would require a full chain read (see `GET /api/v1/audit/verify`) or a Merkle-style inclusion proof, which
+is out of scope here.
 
-Retention does not break verification.
+The signing key is generated when the application starts. That is suitable for demonstrating that a bundle
+has not changed after export, but it is not a durable identity. A production deployment should load the
+private key from a KMS/HSM and publish the public key through a trusted channel. A public key carried only
+inside a bundle prevents unnoticed edits but does not, by itself, prove who created the bundle.
 
-Redaction does not change the original chain hash.
+## Verification behavior
 
-Redacted values are no longer returned.
-
-Export bundles can be independently verified.
-
-Modified export bundles fail verification.
+`GET /api/v1/audit/verify` uses a repeatable-read transaction and checks the complete physical chain. It
+recomputes content hashes, previous links, chain hashes, event count, and the stored chain head. Retention
+metadata and redaction ciphertext are outside the immutable event content, so legitimate archive and
+redaction operations do not create false chain failures.

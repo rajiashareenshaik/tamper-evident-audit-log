@@ -14,9 +14,9 @@ Scenario C applies the audit platform to a compliance reporting requirement arou
 
 ## Current Status
 
-The project is currently in the design and initial implementation phase.
-
-Requirements and initial architecture decisions have been documented before application code is introduced.
+Scenarios A and B are implemented. The service supports event writes and filtered queries, full-chain
+verification, policy-based soft archiving, commitment-backed structured redaction, and signed bulk exports.
+See [Scenario B](docs/scenario-b.md) for the security model and its limitations.
 
 ## Planned Technology
 
@@ -58,6 +58,19 @@ Run the test suite:
 
 ```bash
 ./mvnw test
+```
+
+For local development, set `AUDIT_CRYPTOGRAPHIC_KEY` to a private value. The fallback in
+`application.yml` is intentionally limited to local use.
+
+## Scenario B endpoints
+
+```text
+POST /api/v1/audit/retention/archive-expired
+POST /api/v1/audit/events/{eventId}/redactions
+GET  /api/v1/audit/export?actorId=...
+GET  /api/v1/audit/export?resourceId=...
+GET  /api/v1/audit/verify
 ```
 
 Build a runnable jar:
