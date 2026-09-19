@@ -29,6 +29,16 @@ A redacted value being re-identifiable across fields/events via its commitment (
 
 Unauthorized retention, redaction, or export requests (Scenario B — no auth layer exists)
 
+A caller forging a compliance-relevant `CLIENT_ACCOUNT_ACCESS` event through the generic write
+endpoint, since no event-type registry reserves that name for the dedicated Scenario C endpoint
+(Scenario C)
+
+A source application skipping or failing to call the access-recording endpoint, so an actual
+client account access goes unrecorded with no way to detect the gap (Scenario C)
+
+Unauthorized querying or export of client account access history, since the compliance endpoints
+have no authentication or tenant isolation (Scenario C)
+
 ## Current Controls
 
 Append-only application API
@@ -59,6 +69,11 @@ identical secrets don't produce identical commitments (Scenario B, implemented)
 Hydration safely ignores a payload field that merely looks like a redaction marker rather than
 throwing (Scenario B, implemented)
 
+A fixed, validated request contract (`ClientAccountAccessRequest`) for client account access
+events — required actor/account/action/outcome/source/request fields, a closed `Action`/`Outcome`
+enum, and bounded field/list sizes — so a caller cannot place raw account content or unexpected
+fields into a compliance event through the dedicated endpoint (Scenario C, implemented)
+
 ## Important Limitation
 
 A database administrator with unrestricted access could potentially rewrite all audit records, recalculate all hashes, and update the stored chain head.
@@ -83,3 +98,23 @@ A production version should periodically publish or store signed chain checkpoin
   be cross-verified, and a recipient has no independent way to know which public key to trust.
 - **`redact()` accepts an invalid or nonexistent field path silently** (matches zero rows, returns
   `redactedFields: 0`) rather than rejecting it distinctly from "already redacted."
+
+## Known Open Gaps (Scenario C)
+
+Full detail and reasoning is in [Scenario C](scenario-c.md#what-is-not-implemented); summarized
+here as threat-model entries:
+
+- **No authentication, producer identity verification, or tenant isolation** on either the
+  write (`POST /client-account-access`) or query (`GET /client-account-access`) endpoint. Any
+  caller can submit or read client account access history. This is called out in
+  `docs/scenario-c.md` as the highest-priority production gap for this scenario.
+- **The generic `POST /api/v1/audit/events` endpoint can still forge a `CLIENT_ACCOUNT_ACCESS`
+  event.** There is no event-type registry reserving that name for the dedicated, validated
+  Scenario C contract — a caller who bypasses the typed endpoint can submit an arbitrary payload
+  under the same event type.
+- **No trusted linkage between an actual account read and the audit record describing it.**
+  Recording depends entirely on the source application choosing to call the endpoint; there is no
+  transactional or architectural guarantee that every real access produces a corresponding event,
+  and no mechanism to detect a source application that silently stops reporting.
+- **Reading or exporting compliance access events is not itself audited.** A compliance user (or
+  anyone, given the lack of auth) querying or exporting this history leaves no trace in the log.

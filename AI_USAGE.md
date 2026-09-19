@@ -1,8 +1,3 @@
-Prompt 
-
-Provide different ways for chain-partitioning design brainstrom?
-Breakdown of how violates the requirement of ma
-
 # Prompt Log
 
 Chronological summary of prompts and key decisions from this session, working on the
@@ -256,3 +251,26 @@ tamper-evident audit log service's write/read API, persistence layer, and tests.
   cross-verified across instances or restarts; no durable signing identity exists yet.
 - Retention's cutoff-boundary and repeated-archival tests are mock-based (consistent with the
   rest of the suite) and don't independently verify behavior against a live Postgres instance.
+
+## Scenario C requirement normalization and final review
+
+- **Prompt:** Review the full assignment and the existing repository, then produce a natural, plain language
+  Scenario C submission that does not overstate the implementation.
+- **Decision:** Expanded `docs/scenario-c.md` from a short assumptions note into a clarified requirement,
+  proposed event contract, technical design, task decomposition, implemented scope, missing controls,
+  validation plan, and scope decision. The documentation explicitly treats Scenario C as a partial
+  implementation because the service does not capture account access automatically and has no
+  authentication or report authorization.
+- **Decision:** Replaced the placeholder `FINAL_ENGINEERING_SUMMARY.md` with a repository-wide summary covering
+  rationale, artifacts, design decisions, validation, risks, assumptions, limitations, and production
+  followup. Updated the README and requirements status so they do not claim that Scenario C is complete.
+- **Engineer review required:** Confirm that the proposed `CLIENT_ACCOUNT_ACCESS` event fields match the intended
+  product policy before implementing validation or source application integration. Confirm all stated test
+  results on the submission machine and complete `ATTESTATION.md` personally before submission.
+- **Prompt:** The Scenario C documentation was visible, but no Scenario C implementation files were present.
+- **Decision:** Added a dedicated typed request, service, and controller for recording and querying client
+  account access events. The typed request prevents arbitrary account content from being attached through
+  this endpoint and restricts actions and outcomes to the working assumptions. Added nine focused tests for
+  validation, mapping, query boundaries, and controller responses. The full suite passes with 62 tests.
+- **Limitation retained:** The implementation records events submitted by another application. It does not
+  authenticate producers, observe account reads directly, enforce tenant boundaries, or authorize reviewers.

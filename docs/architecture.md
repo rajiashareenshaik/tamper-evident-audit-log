@@ -6,10 +6,55 @@ The system is a single Spring Boot service backed by PostgreSQL. Scenario A impl
 append-only, hash-chained audit log with filtered/paginated queries and full-chain verification.
 Scenario B extends it with soft-archival retention, structured field-level redaction, and signed
 bulk export — without weakening the Scenario A integrity guarantees.
+Scenario C adds a typed client-account-access API that maps its fixed contract into the same
+append-only event and query path.
 
 The design stays deliberately small: one flat global chain, one Postgres instance, explicit SQL
 via `JdbcTemplate` rather than an ORM, and no framework-level security layer yet (see
 [Threat Model](threat-model.md) for what that leaves open).
+
+## High-level view
+
+```mermaid
+flowchart TB
+    Client(["HTTP client"])
+
+    subgraph ScenarioA["Scenario A — core"]
+        Write["Write & query audit events"]
+        Verify["Full-chain verification"]
+    end
+
+    subgraph ScenarioB["Scenario B — lifecycle"]
+        Retention["Retention<br/>(soft archive)"]
+        Redaction["Redaction<br/>(commitment + encrypted store)"]
+        Export["Signed bulk export"]
+    end
+
+    subgraph ScenarioC["Scenario C — compliance"]
+        Compliance["Client account access<br/>(fixed contract)"]
+    end
+
+    Chain["Append-only global hash chain<br/>(audit_event + audit_chain_head)"]
+    DB[("PostgreSQL")]
+
+    Client --> Write & Verify & Retention & Redaction & Export & Compliance
+
+    Compliance --> Write
+    Write --> Chain
+    Verify --> Chain
+    Export --> Chain
+    Retention -. "own table, never touches audit_event" .-> Chain
+    Redaction -. "own table, never touches audit_event" .-> Chain
+
+    Chain --> DB
+```
+
+Every scenario ultimately reads or writes through the same append-only chain. Scenario C adds no
+new storage — it's a typed, validated front door onto Scenario A's write/query path. Scenario B's
+retention and redaction sit beside the chain rather than inside it: they own separate tables and
+never modify `audit_event`, which is what keeps verification correct without any special-casing
+for archived or redacted rows. See the detailed component diagram below for the actual classes
+and tables involved.
 
 ## Component diagram
 
@@ -19,6 +64,7 @@ flowchart TB
 
     subgraph API["API layer"]
         AuditController["AuditController<br/>POST/GET /api/v1/audit/events"]
+        ClientAccountAccessController["ClientAccountAccessController<br/>POST/GET /api/v1/audit/client-account-access"]
         RetentionController["RetentionController<br/>POST /retention/archive-expired"]
         RedactionController["RedactionController<br/>POST /events/{id}/redactions"]
         ExportController["ExportController<br/>GET /export"]
@@ -27,6 +73,7 @@ flowchart TB
 
     subgraph SVC["Service layer"]
         AuditCommandService["AuditCommandService<br/>(Scenario A: write + read)"]
+        ClientAccountAccessService["ClientAccountAccessService<br/>(Scenario C contract + query)"]
         ChainVerificationService["ChainVerificationService<br/>(Scenario A)"]
         RetentionService["RetentionService<br/>(Scenario B)"]
         RedactionService["RedactionService<br/>(Scenario B)"]
@@ -50,9 +97,11 @@ flowchart TB
         audit_redaction_value[("audit_redaction_value")]
     end
 
-    Client --> AuditController & RetentionController & RedactionController & ExportController & VerificationController
+    Client --> AuditController & ClientAccountAccessController & RetentionController & RedactionController & ExportController & VerificationController
 
     AuditController --> AuditCommandService
+    ClientAccountAccessController --> ClientAccountAccessService
+    ClientAccountAccessService --> AuditCommandService
     RetentionController --> RetentionService
     RedactionController --> RedactionService
     ExportController --> ExportService
@@ -76,6 +125,10 @@ sit alongside `AuditCommandService` and read/write their own tables (`audit_even
 `audit_redaction_value`). None of them ever `UPDATE` or `DELETE` a row in `audit_event` — that
 table stays exactly as Scenario A defined it, append-only and immutable, which is what lets
 `ChainVerificationService` keep working unmodified after Scenario B was added.
+
+Scenario C adds no new table. `ClientAccountAccessService` restricts the event type, resource
+type, action, outcome, and payload shape, then delegates persistence and queries to
+`AuditCommandService`. This keeps Scenario C records in the same integrity chain.
 
 ## Persistence
 

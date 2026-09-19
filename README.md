@@ -16,7 +16,9 @@ Scenario C applies the audit platform to a compliance reporting requirement arou
 
 Scenarios A and B are implemented. The service supports event writes and filtered queries, full-chain
 verification, policy-based soft archiving, commitment-backed structured redaction, and signed bulk exports.
-See [Scenario B](docs/scenario-b.md) for the security model and its limitations.
+Scenario C is documented as a well-reasoned partial implementation: the platform can store and report
+submitted access events through a dedicated typed API, but trusted capture, authorization, and tenant
+isolation are not implemented. See [Scenario C](docs/scenario-c.md) for the scope boundary.
 
 ## Technology
 
@@ -60,6 +62,18 @@ GET  /api/v1/audit/export?actorId=...
 GET  /api/v1/audit/export?resourceId=...
 GET  /api/v1/audit/verify
 ```
+
+## Scenario C endpoints
+
+```text
+POST /api/v1/audit/client-account-access
+GET  /api/v1/audit/client-account-access?actorId=...&accountId=...&from=...&to=...
+```
+
+The write endpoint accepts the fixed client account access contract documented in
+[Scenario C](docs/scenario-c.md). The read endpoint returns only client account access events and
+supports actor, account, time, sequence cursor, and page size filters. These endpoints have no
+authentication or tenant isolation in the prototype.
 
 Build a runnable jar:
 

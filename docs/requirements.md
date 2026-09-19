@@ -20,7 +20,8 @@ Scenario C applies the audit platform to a less-defined compliance reporting req
 
 # 1a. Implementation Status and Deviations
 
-Scenarios A and B are implemented; Scenario C is not started. This section records every place
+Scenarios A and B are implemented. Scenario C is documented as a partial implementation with an explicit
+scope boundary. This section records every place
 the actual implementation deviates from the requirement text below, so this document stays an
 honest record of original intent without being silently rewritten to match what was built.
 

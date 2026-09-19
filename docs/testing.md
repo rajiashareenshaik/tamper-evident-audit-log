@@ -14,7 +14,7 @@ against the local Docker Compose Postgres instance directly rather than an isola
 database (Testcontainers was originally planned — see [Known Gaps](#known-gaps) — but was never
 adopted).
 
-53 tests pass as of the current Scenario B work (`./mvnw test`).
+62 tests pass with the Scenario C implementation (`./mvnw test`).
 
 ## Unit Tests
 
@@ -50,6 +50,16 @@ is idempotent (`RedactionVerificationEndToEndTest`)
 
 Export: filtering by actor/resource, both/neither filter rejection, archived-record inclusion,
 chain-anchor content, independent digest recomputation, tamper detection (`ExportServiceTest`)
+
+## Scenario C Tests
+
+Client account access request validation: required fields, enum decisions, category validation, and optional
+category handling (`ClientAccountAccessRequestTest`)
+
+Scenario C mapping and query boundary: fixed event/resource types, exact bounded payload, compliance query
+filters, page size cap, and invalid time range rejection (`ClientAccountAccessServiceTest`)
+
+Controller behavior: created response and query response mapping (`ClientAccountAccessControllerTest`)
 
 ## Known Gaps
 
