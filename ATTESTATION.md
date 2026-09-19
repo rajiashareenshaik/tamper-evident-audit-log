@@ -2,11 +2,14 @@
 
 Full Name: Rajia Shareen Shaik
 
-Email: rajiashareenshaik@gmail.com
+Email: rajiashaik2405@gmail.com
+AlternateEmail: rajiashareenshaik@gmail.com
 
 Assignment: Tamper-Evident Audit Log Service
 
 Start Date: September 16, 2026
+
+End Date: September 19, 2026
 
 Submission Date: To be completed at submission
 
