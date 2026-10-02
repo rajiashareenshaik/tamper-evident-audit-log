@@ -56,8 +56,8 @@ public class AuditCommandService {
     }
 
     /**
-     * Appends one new event to the global chain: locks the chain head, assigns the event's id
-     * and server timestamp, computes its content and chain hashes off the current tip, inserts
+     * Appends one new event to the global chain: prepares its content, locks the chain head,
+     * computes its chain hash from the current tip, inserts
      * it, and advances the chain head — all within a single transaction, so a failure at any step
      * leaves neither the event row nor the chain head changed.
      *
@@ -67,10 +67,8 @@ public class AuditCommandService {
     @Transactional
     public AuditEvent create(CreateAuditEventRequest request) {
 
-        ChainHead chainHead = chainHeadRepository.lockOrCreate(hashService.genesisHash());
-
         UUID eventId = UUID.randomUUID();
-        Instant eventTimestamp = clock.instant();
+        Instant eventTimestamp = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         RedactionService.PreparedPayload prepared = redactionService == null
                 ? new RedactionService.PreparedPayload(request.payload(), List.of())
                 : redactionService.prepare(eventId, request.payload(), request.redactableFields());
@@ -88,6 +86,7 @@ public class AuditCommandService {
 
         String canonicalJson = canonicalJsonService.canonicalize(canonicalContent);
         String contentHash = hashService.sha256(canonicalJson);
+        ChainHead chainHead = chainHeadRepository.lockOrCreate(hashService.genesisHash());
         String previousHash = chainHead.lastChainHash();
         String chainHash = hashService.chainHash(previousHash, contentHash);
 

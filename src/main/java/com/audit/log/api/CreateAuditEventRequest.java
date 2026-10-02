@@ -18,16 +18,16 @@ import java.util.List;
  */
 public record CreateAuditEventRequest(
 
-        @NotBlank
+        @NotBlank @jakarta.validation.constraints.Size(max = 100)
         String eventType,
 
-        @NotBlank
+        @NotBlank @jakarta.validation.constraints.Size(max = 200)
         String actorId,
 
-        @NotBlank
+        @NotBlank @jakarta.validation.constraints.Size(max = 100)
         String resourceType,
 
-        @NotBlank
+        @NotBlank @jakarta.validation.constraints.Size(max = 200)
         String resourceId,
 
         @NotNull

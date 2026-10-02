@@ -7,6 +7,12 @@ spring:
     username: audit
     password: audit
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${AUDIT_DB_POOL_SIZE:16}
+      minimum-idle: 2
+      connection-timeout: 2000
+      data-source-properties:
+        options: "-c lock_timeout=2000 -c statement_timeout=15000"
 
   flyway:
     enabled: true
@@ -14,6 +20,12 @@ spring:
 
 server:
   port: 8080
+  tomcat:
+    threads:
+      max: 64
+      min-spare: 8
+    max-connections: 256
+    accept-count: 64
 
 management:
   endpoints:
@@ -25,6 +37,7 @@ management:
           - metrics
 
 audit:
+  max-concurrent-writes: ${AUDIT_MAX_CONCURRENT_WRITES:8}
   retention-window: P365D
   redaction-encryption-key: ${AUDIT_REDACTION_ENCRYPTION_KEY:}
   cryptographic-key: ${AUDIT_CRYPTOGRAPHIC_KEY:local-development-key-change-me}
