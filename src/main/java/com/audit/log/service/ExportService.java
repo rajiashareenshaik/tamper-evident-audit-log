@@ -32,6 +32,8 @@ public class ExportService {
         catch (GeneralSecurityException e) { throw new IllegalStateException("Ed25519 is unavailable", e); }
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public ExportBundle export(String actorId, String resourceId) {
         if ((actorId == null) == (resourceId == null))
             throw new IllegalArgumentException("Exactly one of actorId or resourceId is required");

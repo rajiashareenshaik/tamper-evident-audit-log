@@ -11,7 +11,8 @@ import java.util.Map;
 public class ApiExceptionHandler {
     @ExceptionHandler({org.springframework.dao.CannotAcquireLockException.class,
             org.springframework.dao.QueryTimeoutException.class,
-            org.springframework.jdbc.CannotGetJdbcConnectionException.class})
+            org.springframework.jdbc.CannotGetJdbcConnectionException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class})
     public org.springframework.http.ResponseEntity<Map<String, String>> busy(RuntimeException error) {
         return org.springframework.http.ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header("Retry-After", "1")
