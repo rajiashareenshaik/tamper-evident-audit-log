@@ -163,3 +163,11 @@ The service runs locally via Docker Compose (PostgreSQL) and `./mvnw spring-boot
 management/rotation, external integrity anchoring (e.g., publishing periodic chain-head
 checkpoints), and authentication — are called out above and in the threat model, but not
 implemented in this prototype.
+
+## Traffic limits
+
+Event creation has a per-instance HTTP admission limit before database work starts. Preparation
+and content hashing happen before the global chain lock. The event insert, secret inserts, and
+head update still commit together. Database waits and server connections have explicit limits.
+The defaults admit eight writes per instance with a 16-connection pool. The global head still
+serializes appends; increasing the instance count does not remove that bottleneck.

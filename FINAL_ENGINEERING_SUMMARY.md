@@ -6,7 +6,7 @@ This repository contains a working prototype of a tamper evident audit log built
 
 Scenario A implements event creation, filtered queries, cursor pagination, a global hash chain, and full chain verification. Scenario B adds soft archival, structured field redaction, and signed export. Scenario C turns an ambiguous compliance statement into a clarified requirement and technical design, then identifies which parts are supported by the existing platform and which parts remain incomplete.
 
-The prototype demonstrates the core design, but it is not ready to serve as a production compliance system. Authentication, authorization, trusted producer identity, reliable capture from client account systems, persistent export keys, and database integration tests are still required.
+The prototype demonstrates the core design, but it is not ready to serve as a production compliance system. Authentication, authorization, trusted producer identity, reliable capture from client account systems, persistent export keys, and sustained-load validation are still required.
 
 ## Plan and rationale
 
@@ -42,7 +42,11 @@ Filtered exports include record hashes, a chain anchor, a bundle digest, a signa
 
 The automated suite covers hashing, canonical JSON, chain head behavior, event creation, query construction, pagination, chain verification, retention, redaction, and export. The Scenario B tests include independent digest recomputation, tamper detection within an export, archive behavior, commitment behavior, and verification before and after redaction.
 
-The test suite is mainly unit tests using mocks. One Spring context test depends on the local PostgreSQL service. Direct database tampering and concurrent writer behavior are not covered by automated PostgreSQL integration tests. Those are important gaps because they exercise the exact database behavior on which the design relies.
+The default test suite uses mocks. `AuditHttpIT` starts the real HTTP server and applies migrations
+to an isolated PostgreSQL schema. It covers concurrent writes, direct tampering, rollback,
+redaction, pagination, archive visibility, lock timeouts, and the typed account access API.
+The README includes the integration-test command. Sustained load and multi-instance recovery
+still need release testing.
 
 ## Risks and tradeoffs
 
@@ -64,14 +68,21 @@ PostgreSQL is the system of record and the database transaction and row lock beh
 
 The prototype does not include multitenancy, identity integration, a regulator portal, regulator specific report formats, a durable signing identity, a key rotation design, external chain checkpoints, high availability, or operational monitoring.
 
-The API and documentation also record known deviations from the original planning document, including response pagination shape, time range semantics, request correlation, error response shape, and missing integration tests. These deviations are documented rather than hidden.
+The API and documentation also record known deviations from the original planning document, including response pagination shape, time range semantics, request correlation, error response shape, and remaining release tests. These deviations are documented rather than hidden.
 
 ## Production followup
 
-Before production use, I would first add authentication, authorization, tenant isolation, and persistent key management. I would then add real PostgreSQL integration tests for concurrent writes and direct tampering. Scenario C would require an approved event contract, a complete inventory of account access paths, a reliability decision for audit outages, and audit logging for report access.
+Before production use, I would first add authentication, authorization, tenant isolation, and persistent key management. I would then run sustained traffic and failure-recovery tests across multiple application instances. Scenario C would require an approved event contract, a complete inventory of account access paths, a reliability decision for audit outages, and audit logging for report access.
 
 After those controls are in place, I would add monitoring for failed event capture, verification failures, storage growth, archive jobs, redaction failures, export activity, key health, and clock drift. A security review and compliance review would be required before making any external assurance claim.
 
 ## Engineer ownership
 
 AI assistance was used for implementation support, test generation, review, debugging, and documentation. The accepted, modified, and rejected suggestions are recorded in AI_USAGE.md. The engineer remains responsible for reviewing the code, running the validation, understanding the design, and deciding whether the remaining risks are acceptable.
+
+## Traffic handling
+
+HTTP appends now share a bounded admission limit. Content preparation happens before the chain
+lock, and timestamps use PostgreSQL precision. Connection, lock, and statement waits are bounded.
+The global chain still serializes commits, so this does not establish a high-TPS capacity claim.
+Idempotency, batching, and separate chains remain future work.

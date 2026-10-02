@@ -25,10 +25,28 @@ isolation are not implemented. See [Scenario C](docs/scenario-c.md) for the scop
 In use: Java 21, Spring Boot, PostgreSQL, Spring JDBC, Flyway, Docker Compose, JUnit 5, Mockito,
 Spring Boot Actuator.
 
-Originally planned but not adopted: Testcontainers (tests use Mockito for units and the local
-Docker Compose Postgres directly for the one `@SpringBootTest` context-load test, not an isolated
-Testcontainers instance) and OpenAPI (no springdoc/swagger dependency exists; the API is
-documented in [docs/requirements.md](docs/requirements.md) and [docs/scenario-b.md](docs/scenario-b.md) instead).
+Unit tests use Mockito. The HTTP integration suite starts the application and uses a separate
+PostgreSQL schema for each run. Run it against a disposable database:
+
+```bash
+AUDIT_E2E_DB_URL=jdbc:postgresql://127.0.0.1:55432/auditdb ./mvnw -Dtest=AuditHttpIT test
+```
+
+Database credentials default to `audit` / `audit`; override them with `AUDIT_E2E_DB_USER`
+and `AUDIT_E2E_DB_PASSWORD`.
+
+## High traffic
+
+Writes share one global chain lock. This update shortens the work under that lock, bounds
+concurrent HTTP writes, and returns `503` when write capacity is exhausted. It also adds
+PostgreSQL integration tests and a repeatable load script:
+
+```bash
+python3 scripts/load-test.py --requests 2000 --concurrency 8
+```
+
+The script writes real records. Use a separate test environment. Sustained TPS has not been
+measured; batching and separate chains remain future work.
 
 ## Running Locally
 
@@ -94,3 +112,23 @@ The repository contains the application code, [architecture documentation](docs/
 [B](docs/scenario-b.md), [C](docs/scenario-c.md)), [engineering decisions](docs/decisions/),
 [threat model](docs/threat-model.md), [AI usage traceability](AI_USAGE.md), and final
 implementation summary (`FINAL_ENGINEERING_SUMMARY.md`, written once Scenario C is complete).
+
+## Additional integration checks
+
+`AuditHttpIT` also checks retention at the exact cutoff, export signatures from the HTTP response,
+verification and exports during writes, two application instances sharing one chain, pool
+exhaustion, burst rejection and recovery, and a 128 KiB payload round trip.
+
+The optional soak test reconciles successful HTTP responses with stored events and verifies the
+chain afterward. Run it only against a disposable database:
+
+```bash
+AUDIT_E2E_DB_URL=jdbc:postgresql://127.0.0.1:55432/auditdb \
+AUDIT_RUN_SOAK=true AUDIT_SOAK_SECONDS=60 \
+./mvnw -Dtest=AuditHttpIT test
+```
+
+The soak uses twelve clients at fixed concurrency. It checks correctness under sustained writes;
+it does not certify a target TPS or latency SLA. Database failover, process crashes, ambiguous
+commit outcomes, and ingress payload rejection still need separate tests. Authentication and
+idempotency tests depend on those features being implemented.

@@ -274,3 +274,19 @@ tamper-evident audit log service's write/read API, persistence layer, and tests.
   validation, mapping, query boundaries, and controller responses. The full suite passes with 62 tests.
 - **Limitation retained:** The implementation records events submitted by another application. It does not
   authenticate producers, observe account reads directly, enforce tenant boundaries, or authorize reviewers.
+
+## Traffic handling and database tests
+
+- Request: review high-traffic behavior, add important end-to-end cases, and provide commit phases
+  with plain-language documentation.
+- Changes: bounded HTTP write admission, database timeouts, shorter chain-lock work, timestamp
+  precision fix, real HTTP/PostgreSQL tests, and a load script.
+- Limits: the global chain still serializes writes. Idempotency, batching, chain splitting, and
+  durable ingestion are documented next steps. No production TPS claim has been made.
+
+## Expanded integration coverage
+
+Added HTTP tests for retention boundaries, export signatures, concurrent snapshots, two server
+instances, pool exhaustion, bursts, larger payloads, and an optional soak. Export now reads its
+records and anchor in one database snapshot. Transaction-start connection failures return 503.
+Database failover and process-crash recovery remain separate release tests.
